@@ -14,53 +14,57 @@ defmodule DSA.ShuntingYard do
   # Maps each operator to a number representing its relative precedence.
   @op_precedence %{ '+' => 0, '-' => 0, '*' => 1, '/' => 1 }
 
-  # Determine whether a given operation has precedence over another op.
+  # Determine whether a given operator has precedence over another op.
   defp has_precedence(op, other) do
-    @op_precedence[op] > @op_precedence[other]
+    # Note that all ops we support are left-associative, so we don't need to
+    # check for associativity here.
+    @op_precedence[other] <= @op_precedence[op]
   end
 
   # End of input, and the stack is empty - we're done.
-  defp _shunt([], []), do: []
+  defp _shunt([], [], output), do: Enum.reverse(output)
 
   # End of input, but stack is non-empty - pop from the stack.
-  defp _shunt([], [token | rem]), do: [token] ++ _shunt([], rem)
+  defp _shunt([], [token | rem], output), do: _shunt([], rem, [token | output])
 
   # Next token is (, push it onto the stack.
-  defp _shunt([token='(' | rem], stack), do: _shunt(rem, [token] ++ stack)
+  defp _shunt([token='(' | rem], stack, output) do
+    _shunt(rem, [token | stack], output)
+  end
 
   # Found the matching ( for a ), carry on processing the rest of the input.
-  defp _shunt([')' | rem], ['(' | stack_rem]) do
-      _shunt(rem, stack_rem)
+  defp _shunt([')' | rem], ['(' | stack_rem], output) do
+      _shunt(rem, stack_rem, output)
   end
 
   # Next token is ), pop from the stack to the output until we find
   # a matching (.
-  defp _shunt(expr=[')' | _], [stack_head | stack_rem]) do
-      [stack_head] ++ _shunt(expr, stack_rem)
+  defp _shunt(input=[')' | _], [stack_head | stack_rem], output) do
+      _shunt(input, stack_rem, [stack_head | output])
   end
 
   # Next token is an operator, and the top of the stack is also an operator.
   # Need to compare the precedence of the operators.
-  defp _shunt(input=[op1 | rem_input], stack=[op2 | rem_stack])
+  defp _shunt(input=[op1 | rem_input], stack=[op2 | rem_stack], output)
     when op1 in @ops and op2 in @ops do
     if has_precedence(op2, op1) do
       # Op2 has higher precedence, pop it off the stack and into the output.
-      [op2] ++ _shunt(input, rem_stack)
+      _shunt(input, rem_stack, [op2 | output])
     else
       # Op1 has higher precedence, push it onto the stack.
-      _shunt(rem_input, [op1] ++ stack)
+      _shunt(rem_input, [op1 | stack], output)
     end
   end
     
   # Next token is an operator, and the top of the stack isn't one. Push onto
   # the stack.
-  defp _shunt([op | rem], stack) when op in @ops do
-      _shunt(rem, [op] ++ stack)
+  defp _shunt([op | rem], stack, output) when op in @ops do
+      _shunt(rem, [op | stack], output)
   end
 
   # Next token is a number, just add it to the output.
-  defp _shunt([token | rem], stack) when is_number(token) do
-      [token] ++ _shunt(rem, stack)
+  defp _shunt([token | rem], stack, output) when is_number(token) do
+      _shunt(rem, stack, [token | output])
   end
 
   # Convert a string containing a single term into an integer, float or
@@ -89,6 +93,31 @@ defmodule DSA.ShuntingYard do
     |> Enum.map(&convert_term/1)
   end
 
-  def shunt(expr) when is_binary(expr), do: expr |> parse_expr |> shunt
-  def shunt(expr) when is_list(expr), do: _shunt(expr, [])
+  # Converts a single entry in the output list into a string. For example
+  # '+' -> "+" or 2.2 -> "2.2"
+  defp format_output(term) when is_float(term), do: Float.to_string(term)
+  defp format_output(term) when is_integer(term), do: Integer.to_string(term)
+  defp format_output(term) when is_list(term), do: List.to_string(term)
+
+  @doc """
+  Convert an expression in infix notation to reverse-polish notation, using
+  the Shunting Yard Algorithm.
+
+  ## Parameters
+
+    - expr: String containing the expression to be converted.
+
+  ## Examples
+
+      iex> DSA.ShuntingYard.shunt("1 - ((2 + 3) / 4)")
+      "1 2 3 + 4 / -"
+  """
+  @spec shunt(String.t) :: String.t
+  def shunt(expr) do
+    expr
+    |> parse_expr
+    |> _shunt([], [])
+    |> Enum.map(&format_output/1)
+    |> Enum.join(" ")
+  end
 end
