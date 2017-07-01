@@ -45,5 +45,19 @@ main (int argc, char *argv[])
 
     heap_destroy(&heap);
 
+    heap_init(&heap, sizeof(val), 5, &heap_test_max_cmp);
+    val = 2; heap_insert(&heap, &val);
+    val = 4; heap_insert(&heap, &val);
+    val = 1; heap_insert(&heap, &val);
+    val = 0; heap_insert(&heap, &val);
+    val = 3; heap_insert(&heap, &val);
+
+    for (int i = 4; i >= 0; i--) {
+        heap_extract(&heap, &val);
+        if (val != i) {
+            return 1;
+        }
+    }
+
     return 0;
 }

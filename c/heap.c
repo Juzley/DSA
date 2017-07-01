@@ -14,7 +14,6 @@
 static inline size_t
 parent_index (size_t index)
 {
-    assert(index != 0);
     return (index - 1) / 2;
 }
 
